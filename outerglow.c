@@ -14,7 +14,7 @@
  * License along with GEGL; if not, see <https://www.gnu.org/licenses/>.
  *
  * Copyright 2006 Øyvind Kolås <pippin@gimp.org>
- * 2023 Beaver (GEGL outerglow)
+ * 2023 Beaver (GEGL Aura)
  */
 
 #include "config.h"
@@ -42,6 +42,7 @@ property_double (gradius, _("Gaussian Blur to Glow"), 0.0)
   ui_gamma    (2.0)
   ui_meta     ("unit", "pixel-distance")
 
+
 property_double (opacity, _("Make Opacity over 100%"), 1)
   value_range   (1, 3.0)
   ui_steps      (1, 3.0)
@@ -65,6 +66,54 @@ property_int    (mask_radius, _("Internal Oilify filter for Aura"), 4)
 
 property_seed (seed, _("Random seed for Aura"), rand)
 
+property_boolean (mosaic, _("Enable Firey Aura mode SLOW"), FALSE)
+  description    (_("Firey Aura mode via Mosaic Filter"))
+
+
+
+property_double (gradius2, _("Firey Aura mode blur"), 6.0)
+  description (_("Blur radius"))
+  value_range (0.0, G_MAXDOUBLE)
+  ui_range    (0.0, 50.0)
+  ui_gamma    (2.0)
+  ui_meta     ("unit", "pixel-distance")
+
+
+enum_start (gegl_mosaic_tile2)
+  enum_value (GEGL_MOSAIC_TILE_SQUARES2,   "squares",   N_("Squares"))
+  enum_value (GEGL_MOSAIC_TILE_HEXAGONS2,  "hexagons",  N_("Hexagons"))
+  enum_value (GEGL_MOSAIC_TILE_OCTAGONS2,  "octagons",  N_("Octagons"))
+  enum_value (GEGL_MOSAIC_TILE_TRIANGLES2, "triangles", N_("Triangles"))
+enum_end (GeglMosaicTile2)
+
+property_enum (tile_type, _("Firey Aura Mode Flame shape"),
+    GeglMosaicTile2, gegl_mosaic_tile2, GEGL_MOSAIC_TILE_TRIANGLES2)
+    description (_("What shape to use for tiles"))
+
+property_double (tile_size2, _("Firey Aura Mode Flame Size"), 40.0)
+    description (_("Average diameter of each tile (in pixels)"))
+    value_range (1.0, 70.0)
+    ui_range    (5.0, 70.0)
+    ui_meta     ("unit", "pixel-distance")
+
+
+property_double (tile_neatness, _("Tile neatness"), 0.0)
+    description (_("Deviation from perfectly formed tiles"))
+    value_range (0.0, 1.0)
+    ui_meta     ("role", "output-extent")
+
+
+property_color (joints_color, _("Please make Transparent"), "#00000000")
+    ui_meta     ("role", "output-extent")
+
+
+property_color (light_color, _("Please make Transparent 2"), "#00000000")
+    ui_meta     ("role", "output-extent")
+
+property_seed (fireseed, _("Seed for Firey Aura"), random)
+
+/* I Need help. GEGL does not allow multiple "rand" commands to exist. Renaming it to a number doesn't work either. The goal is to get both Seeds to work. */
+
 
 
 
@@ -76,10 +125,30 @@ property_seed (seed, _("Random seed for Aura"), rand)
 
 #include "gegl-op.h"
 
+
+typedef struct
+{
+  GeglNode *input;
+  GeglNode *color;
+  GeglNode *opacity;
+  GeglNode *xor;
+  GeglNode *oilify;
+  GeglNode *cubism;
+  GeglNode *lblur;
+  GeglNode *nop;
+  GeglNode *gblur;
+  GeglNode *mosaic;
+  GeglNode *gblur2;
+  GeglNode *output;
+} State; 
+
+
+
 static void attach (GeglOperation *operation)
 {
   GeglNode *gegl = operation->node;
-  GeglNode *input, *output, *color, *oilify, *cubism, *xor, *gblur, *lblur, *nop, *opacity;
+  GeglProperties *o = GEGL_PROPERTIES (operation);
+  GeglNode *input, *output, *color, *oilify, *cubism, *xor, *gblur, *lblur, *nop, *mosaic, *gblur2, *opacity;
 
 
   input    = gegl_node_get_input_proxy (gegl, "input");
@@ -93,6 +162,16 @@ static void attach (GeglOperation *operation)
   opacity   = gegl_node_new_child (gegl,
                                   "operation", "gegl:opacity",
                                   NULL);
+
+  mosaic   = gegl_node_new_child (gegl,
+                                  "operation", "gegl:mosaic",
+                                  NULL);
+
+  gblur2   = gegl_node_new_child (gegl,
+                                  "operation", "gegl:gaussian-blur",
+                                  NULL);
+
+
 
 
   xor   = gegl_node_new_child (gegl,
@@ -131,6 +210,15 @@ static void attach (GeglOperation *operation)
   gegl_operation_meta_redirect (operation, "seed", cubism, "seed");
   gegl_operation_meta_redirect (operation, "gradius", gblur, "std-dev-x");
   gegl_operation_meta_redirect (operation, "gradius", gblur, "std-dev-y");
+  gegl_operation_meta_redirect (operation, "gradius2", gblur2, "std-dev-x");
+  gegl_operation_meta_redirect (operation, "gradius2", gblur2, "std-dev-y");
+  gegl_operation_meta_redirect (operation, "tile_type", mosaic, "tile-type");
+  gegl_operation_meta_redirect (operation, "tile_size2", mosaic, "tile-size");
+  gegl_operation_meta_redirect (operation, "joints_color", mosaic, "joints-color");
+  gegl_operation_meta_redirect (operation, "light_color", mosaic, "light-color");
+  gegl_operation_meta_redirect (operation, "fireseed", mosaic, "seed");
+
+
 
 
 
@@ -140,18 +228,57 @@ static void attach (GeglOperation *operation)
 
 
 
-
-
+ /* Now save points to the various gegl nodes so we can rewire them in
+   * update_graph() later
+   */
+  State *state = g_malloc0 (sizeof (State));
+  state->input = input;
+  state->nop = nop;
+  state->cubism = cubism;
+  state->oilify = oilify;
+  state->lblur = lblur;
+  state->gblur = gblur;
+  state->xor = xor;
+  state->color = color;
+  state->opacity = opacity;
+  state->mosaic = mosaic;
+  state->gblur2 = gblur2;
+  state->output = output;
+  o->user_data = state;
 }
+
+static void
+update_graph (GeglOperation *operation)
+{
+  GeglProperties *o = GEGL_PROPERTIES (operation);
+  State *state = o->user_data;
+  if (!state) return;
+
+  if (o->mosaic)
+  {
+    gegl_node_link_many (state->input, state->nop, state->cubism, state->oilify, state->lblur, state->gblur, state->xor, state->color, state->color, state->opacity, state->mosaic, state->gblur2, state->output, NULL);
+      gegl_node_connect_from (state->xor, "aux", state->nop, "output");
+  }
+  else
+  {
+    gegl_node_link_many (state->input, state->nop, state->cubism, state->oilify, state->lblur, state->gblur, state->xor, state->color, state->color, state->opacity, state->output, NULL);
+      gegl_node_connect_from (state->xor, "aux", state->nop, "output");
+  }
+}
+
 
 static void
 gegl_op_class_init (GeglOpClass *klass)
 {
   GeglOperationClass *operation_class;
 
+
   operation_class = GEGL_OPERATION_CLASS (klass);
+   GeglOperationMetaClass *operation_meta_class = GEGL_OPERATION_META_CLASS (klass);
+
 
   operation_class->attach = attach;
+  operation_meta_class->update = update_graph;
 
   gegl_operation_class_set_keys (operation_class,
     "name",        "gegl:aura",
