@@ -44,8 +44,15 @@ property_double (gradius, _("Gaussian Blur to Glow"), 0.0)
 
 
 property_double (opacity, _("Make Opacity over 100%"), 1)
-  value_range   (1, 3.0)
-  ui_steps      (1, 3.0)
+  value_range   (1, 4.0)
+  ui_steps      (1, 4.0)
+
+
+property_double (hopacity, _("hidden opacity"), 1.1)
+  value_range   (1, 4)
+  ui_steps      (1, 4)
+    ui_meta     ("role", "output-extent")
+
 
 
 property_double (tile_size, _("Aura Size"), 3.8)
@@ -130,6 +137,7 @@ typedef struct
 {
   GeglNode *input;
   GeglNode *color;
+  GeglNode *hopacity;
   GeglNode *opacity;
   GeglNode *xor;
   GeglNode *oilify;
@@ -148,7 +156,7 @@ static void attach (GeglOperation *operation)
 {
   GeglNode *gegl = operation->node;
   GeglProperties *o = GEGL_PROPERTIES (operation);
-  GeglNode *input, *output, *color, *oilify, *cubism, *xor, *gblur, *lblur, *nop, *mosaic, *gblur2, *opacity;
+  GeglNode *input, *output, *hopacity, *color, *oilify, *cubism, *xor, *gblur, *lblur, *nop, *mosaic, *gblur2, *opacity;
 
 
   input    = gegl_node_get_input_proxy (gegl, "input");
@@ -162,6 +170,11 @@ static void attach (GeglOperation *operation)
   opacity   = gegl_node_new_child (gegl,
                                   "operation", "gegl:opacity",
                                   NULL);
+
+  hopacity   = gegl_node_new_child (gegl,
+                                  "operation", "gegl:opacity",
+                                  NULL);
+
 
   mosaic   = gegl_node_new_child (gegl,
                                   "operation", "gegl:mosaic",
@@ -204,6 +217,7 @@ static void attach (GeglOperation *operation)
   gegl_operation_meta_redirect (operation, "color", color, "value");
   gegl_operation_meta_redirect (operation, "radius", lblur, "radius");
   gegl_operation_meta_redirect (operation, "opacity", opacity, "value");
+  gegl_operation_meta_redirect (operation, "hopacity", hopacity, "value");
   gegl_operation_meta_redirect (operation, "tile_size", cubism, "tile-size");
   gegl_operation_meta_redirect (operation, "tile_saturation", cubism, "tile-saturation");
   gegl_operation_meta_redirect (operation, "mask_radius", oilify, "mask-radius");
@@ -223,7 +237,7 @@ static void attach (GeglOperation *operation)
 
 
 
-  gegl_node_link_many (input, nop, cubism, oilify, lblur, gblur, xor, color, opacity, output, NULL);
+  gegl_node_link_many (input, hopacity, nop, cubism, oilify, lblur, gblur, xor, color, opacity, output, NULL);
   gegl_node_connect_from (xor, "aux", nop, "output");
 
 
@@ -241,6 +255,7 @@ static void attach (GeglOperation *operation)
   state->xor = xor;
   state->color = color;
   state->opacity = opacity;
+  state->hopacity = hopacity;
   state->mosaic = mosaic;
   state->gblur2 = gblur2;
   state->output = output;
@@ -256,12 +271,12 @@ update_graph (GeglOperation *operation)
 
   if (o->mosaic)
   {
-    gegl_node_link_many (state->input, state->nop, state->cubism, state->oilify, state->lblur, state->gblur, state->xor, state->color, state->color, state->opacity, state->mosaic, state->gblur2, state->output, NULL);
+    gegl_node_link_many (state->input, state->hopacity, state->nop, state->cubism, state->oilify, state->lblur, state->gblur, state->xor, state->color, state->color, state->opacity, state->mosaic, state->gblur2, state->output, NULL);
       gegl_node_connect_from (state->xor, "aux", state->nop, "output");
   }
   else
   {
-    gegl_node_link_many (state->input, state->nop, state->cubism, state->oilify, state->lblur, state->gblur, state->xor, state->color, state->color, state->opacity, state->output, NULL);
+    gegl_node_link_many (state->input, state->hopacity, state->nop, state->cubism, state->oilify, state->lblur, state->gblur, state->xor, state->color, state->color, state->opacity, state->output, NULL);
       gegl_node_connect_from (state->xor, "aux", state->nop, "output");
   }
 }
