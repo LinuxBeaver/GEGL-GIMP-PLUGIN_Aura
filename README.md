@@ -1,6 +1,4 @@
-
-You need to build outerglow.so/.dll and put it in /gegl-0.4/plug-ins 
-
+## GEGL Aura - make a aura flame outer glow effect in Gimp
 
 
 ![image preview](gitpreview.png )
