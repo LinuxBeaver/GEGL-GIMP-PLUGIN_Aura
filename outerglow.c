@@ -296,7 +296,7 @@ gegl_op_class_init (GeglOpClass *klass)
   operation_meta_class->update = update_graph;
 
   gegl_operation_class_set_keys (operation_class,
-    "name",        "gegl:aura",
+    "name",        "lb:aura",
     "title",       _("Aura"),
     "categories",  "Artistic",
     "reference-hash", "3oudo6vg25ara040vxn3vv5sb2a",
