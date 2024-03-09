@@ -272,12 +272,12 @@ update_graph (GeglOperation *operation)
   if (o->mosaic)
   {
     gegl_node_link_many (state->input, state->hopacity, state->nop, state->cubism, state->oilify, state->lblur, state->gblur, state->xor, state->color, state->opacity, state->mosaic, state->gblur2, state->fixgraph, state->output, NULL);
-      gegl_node_connect_from (state->xor, "aux", state->nop, "output");
+      gegl_node_connect (state->xor, "aux", state->nop, "output");
   }
   else
   {
     gegl_node_link_many (state->input, state->hopacity, state->nop, state->cubism, state->oilify, state->lblur, state->gblur, state->xor, state->color,  state->opacity, state->fixgraph, state->output, NULL);
-      gegl_node_connect_from (state->xor, "aux", state->nop, "output");
+      gegl_node_connect (state->xor, "aux", state->nop, "output");
   }
 }
 
@@ -300,7 +300,7 @@ gegl_op_class_init (GeglOpClass *klass)
     "title",       _("Aura"),
     "categories",  "Artistic",
     "reference-hash", "3oudo6vg25ara040vxn3vv5sb2a",
-    "description", _("GEGL does both an Outer Glow and Inner Glow aura-ish effect. Apply filter on duplicate layer above transparent subject/object. Filter is intended to be used with Gimp blend modes HSV Hue, HSL Color and Grain Merge. Filter benefits from the Union Composite Mode when used in transparent backgrounds."
+    "description", _("Generate both an Outer Glow and Inner Glow aura-ish effect. Apply filter on duplicate layer above transparent subject/object. Filter is intended to be used with Gimp blend modes HSV Hue, HSL Color and Grain Merge. Filter benefits from the Union Composite Mode when used in transparent backgrounds."
                      ""),
     NULL);
 }
